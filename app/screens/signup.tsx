@@ -3,7 +3,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } f
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Styles from '../styles/logRegStyle'
-import { app } from '../config/firebaseConfig';
+import app from '../config/firebaseConfig';
 
 export default function SignUpScreen({ navigation }: { navigation: any }) {
 
