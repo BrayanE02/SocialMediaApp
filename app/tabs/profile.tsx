@@ -2,7 +2,8 @@ import React from 'react';
 import { getAuth, signOut } from "firebase/auth";
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Styles from '../styles/logRegStyle';
-import app from '../config/firebaseConfig';
+import { app } from '../../config/firebaseConfig';
+import { router } from 'expo-router';
 
 export default function ProfileScreen({ navigation }: { navigation: any }) {
     const auth = getAuth(app);
@@ -12,10 +13,11 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
             await signOut(auth);
             console.log("User logged out successfully.");
             // Navigate back to Login screen after logout
-            navigation.navigate("login");
+            router.push("/auth/login");
         } catch (error: any) {
             console.error("Error logging out:", error.message);
             alert("An error occurred while logging out.");
+
         }
     };
 

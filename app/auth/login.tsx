@@ -1,12 +1,11 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
-import Styles from '../styles/logRegStyle'
+import Styles from '../styles/logRegStyle';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import app from '../config/firebaseConfig';
+import { app, auth } from '../../config/firebaseConfig';
+import { router } from 'expo-router';
 
-export default function LoginScreen({ navigation }: { navigation: any }) {
-
-    const auth = getAuth(app);
+export default function Login({ navigation }: { navigation: any }) {
 
     const [email, setEmail] = React.useState("");
     const [password, setPassword] = React.useState("");
@@ -22,7 +21,7 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
             console.log("User logged in successfully:", userCredential.user);
 
             // Navigate to Feed after successful login
-            navigation.navigate("feed");
+            router.push("/tabs/feed");
         } catch (error: any) {
             console.error("Error logging in:", error.message);
             alert(error.message);
@@ -57,7 +56,7 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
                 <Text style={Styles.buttonText}>Log In</Text>
             </TouchableOpacity>
             <TouchableOpacity
-                onPress={() => navigation.navigate('signup')}>
+                onPress={() => router.push("/auth/signup")}>
                 <Text style={Styles.link}>Create New Account?</Text>
             </TouchableOpacity>
         </View>

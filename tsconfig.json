@@ -7,9 +7,11 @@
     "paths": {
       "@/*": [
         "./*"
-      ]
+      ],
+      "@firebase/auth": ["./node_modules/@firebase/auth/dist/auth/index.rn.d.ts"]
     }
   },
+  
   "include": [
     "**/*.ts",
     "**/*.tsx",

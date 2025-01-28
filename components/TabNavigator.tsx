@@ -1,10 +1,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text } from 'react-native';
-import FeedScreen from '../app/screens/feed';
+import FeedScreen from '../app/tabs/feed';
 import ProfileScreen from '../app/screens/profile';
-import GroupsScreen from '../app/screens/groups';
-import CreatePostScreen from '../app/screens/createPost';
+import GroupsScreen from '../app/tabs/groups';
+import CreatePostScreen from '../app/tabs/createPost';
 import { Ionicons } from '@expo/vector-icons'; // For icons
 
 const Tab = createBottomTabNavigator();

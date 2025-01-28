@@ -1,61 +1,68 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet } from "react-native";
 
 const Styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'black',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "black",
   },
   backArrow: {
-    position: 'absolute',
+    position: "absolute",
     top: 60, // device's safe area
     left: 20,
-},
-backColor: {
+  },
+  backColor: {
     fontSize: 24,
-    color: 'white',
-},
+    color: "white",
+  },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
     marginBottom: 20,
   },
   subtitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "white",
+    textAlign: "center",
     marginBottom: 20,
-},
+  },
   input: {
-    width: '80%',
+    width: "80%",
     height: 40,
-    borderColor: '#D3D3D3',
+    borderColor: "#D3D3D3",
     borderWidth: 1,
     borderRadius: 8,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     paddingHorizontal: 10,
     marginBottom: 10,
   },
   button: {
-    backgroundColor: '#A9A9A9',
+    backgroundColor: "#A9A9A9",
     paddingVertical: 10,
     paddingHorizontal: 10,
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 8,
     marginTop: 10,
   },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   link: {
-    color: 'white',
+    color: "white",
     marginTop: 20,
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
+  },
+  errorText: {
+    color: "white",
+    fontSize: 12,
+    alignSelf: "flex-start",
+    marginBottom: 5,
+    marginLeft: "10%",
   },
 });
 
