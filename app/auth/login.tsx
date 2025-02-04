@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
 import Styles from '../styles/logRegStyle';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { app, auth } from '../../config/firebaseConfig';
@@ -24,7 +24,33 @@ export default function Login({ navigation }: { navigation: any }) {
             router.push("/tabs/feed");
         } catch (error: any) {
             console.error("Error logging in:", error.message);
-            alert(error.message);
+            // Handle common Firebase Auth errors
+            let errorMessage = "";
+            switch (error.code) {
+                case "auth/invalid-credential":
+                    errorMessage = "Invalid credentials provided. Please check your email and password.";
+                    break;
+                case "auth/invalid-email":
+                    errorMessage = "The email address is not valid.";
+                    break;
+                case "auth/user-disabled":
+                    errorMessage = "This user account has been disabled.";
+                    break;
+                case "auth/user-not-found":
+                    errorMessage = "There is no account for this email.";
+                    break;
+                case "auth/wrong-password":
+                    errorMessage = "The password is incorrect.";
+                    break;
+                case "auth/too-many-requests":
+                    errorMessage = "Too many unsuccessful login attempts. Please try again later.";
+                    break;
+                default:
+                    errorMessage = error.message;
+                    break;
+            }
+            // Display the error message in an alert
+            Alert.alert("Login Error", errorMessage);
         }
     };
 
