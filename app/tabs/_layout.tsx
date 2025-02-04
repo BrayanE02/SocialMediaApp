@@ -17,7 +17,7 @@ export default function Layout() {
         options={{
           tabBarLabel: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" style={{ fontSize: size, color }} />
+            <Ionicons name="home" style={{ fontSize: size, color }} />
           ),
         }}
       />
@@ -28,7 +28,7 @@ export default function Layout() {
         options={{
           tabBarLabel: "Post",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" style={{ fontSize: size, color }} />
+            <Ionicons name="add-circle" style={{ fontSize: size, color }} />
           ),
         }}
       />
@@ -39,7 +39,7 @@ export default function Layout() {
         options={{
           tabBarLabel: "Groups",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" style={{ fontSize: size, color }} />
+            <Ionicons name="people" style={{ fontSize: size, color }} />
           ),
         }}
       />
@@ -50,7 +50,7 @@ export default function Layout() {
         options={{
           tabBarLabel: "Profile",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" style={{ fontSize: size, color }} />
+            <Ionicons name="person" style={{ fontSize: size, color }} />
           ),
         }}
       />

@@ -1,10 +1,14 @@
 import React from 'react';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Styles from '../styles/logRegStyle'
 import { app } from '../../config/firebaseConfig';
 import { router } from 'expo-router';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+
+// Initialize Firestore
+const db = getFirestore(app);
 
 export default function SignUpScreen({ navigation }: { navigation: any }) {
 
@@ -38,17 +42,58 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
         return Object.keys(newErrors).length === 0;
     };
 
+    // Helper function to check if a username already exists in Firestore
+    const checkUsernameExists = async (username: string): Promise<boolean> => {
+        const q = query(collection(db, "users"), where("username", "==", username));
+        const querySnapshot = await getDocs(q);
+        return !querySnapshot.empty;
+    };
+
     const handleSignUp = async () => {
-        if (!validateInputs()) return;
+        console.log("Sign Up button pressed"); // Debug log
+        //if (!validateInputs()) return;
+
+        // Check if the username is already taken
+        if (await checkUsernameExists(username)) {
+            setErrors((prevErrors) => ({
+                ...prevErrors,
+                username: "This username is already taken. Please choose another.",
+            }));
+            return;
+        }
 
         try {
+            // Create the user in Firebase Authentication
+            console.log("Creating user with email and password");
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+            // update the user's display name in Auth
+            console.log("User created, updating profile");
+            await updateProfile(userCredential.user, { displayName: username });
+
+            // Save the additional user data to Firestore
+            console.log("Saving user data to Firestore");
+            await setDoc(doc(db, "users", userCredential.user.uid), {
+                username,
+                email,
+                createdAt: new Date(),
+            });
+
             console.log("User created successfully:", userCredential.user);
             // Navigate to Feed or Login page after successful sign-up
-            router.push("/screens/feed");
+            router.push("/tabs/feed");
         } catch (error: any) {
             console.error("Error signing up:", error.message);
-            alert(error.message); // Display the error to the user
+
+            // Check for duplicate email error code
+            if (error.code === "auth/email-already-in-use") {
+                setErrors((prevErrors) => ({
+                    ...prevErrors,
+                    email: "This email is already in use. Please use a different email.",
+                }));
+            } else {
+                alert(error.message); // Display the error to the user for any other error
+            }
         }
     };
 
