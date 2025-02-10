@@ -269,6 +269,11 @@ const EditProfileScreen = () => {
             <TouchableOpacity onPress={saveChanges} style={styles.saveButton}>
                 <Text style={styles.saveButtonText}>Save Changes</Text>
             </TouchableOpacity>
+
+            {/* Logout Button */}
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                <Text style={styles.logoutButtonText}>Log Out</Text>
+            </TouchableOpacity>
         </View>
     );
 };
@@ -344,6 +349,19 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     saveButtonText: {
+        color: '#000',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    logoutButton: {
+        alignSelf: 'center',
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        marginVertical: 20,
+    },
+    logoutButtonText: {
         color: '#000',
         fontSize: 16,
         fontWeight: 'bold',
