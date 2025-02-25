@@ -1,21 +1,36 @@
-// app/styles/TabsStyles.ts
 import { StyleSheet, Dimensions } from "react-native";
 
 const { width, height } = Dimensions.get("window");
-
+interface HeaderBarProps {
+  title?: string;
+}
 export default StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
   container: {
     flex: 1,
-    width: width, // or simply '100%'
-    height: height, // or simply '100%'
-    backgroundColor: "black", // or any background color you prefer
-    paddingHorizontal: 20,
-    paddingTop: 50, // adjust for status bar or any header if needed
+    backgroundColor: "black",
+    paddingHorizontal: 25,
+  },
+  text: {
+    color: "white",
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "white",
-    marginBottom: 20,
+    textAlign: "center",
   },
 });

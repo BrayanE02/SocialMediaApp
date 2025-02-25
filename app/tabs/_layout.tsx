@@ -9,6 +9,10 @@ export default function Layout() {
         tabBarActiveTintColor: "#fff",
         tabBarInactiveTintColor: "#888",
         headerShown: false,
+        headerStyle: { backgroundColor: "#000" },
+        headerTintColor: "#fff",
+        headerTitleStyle: { fontWeight: "bold" },
+        headerTitleAlign: "left",
       }}
     >
       {/* Home Tab */}
@@ -22,7 +26,7 @@ export default function Layout() {
         }}
       />
 
-      {/* Post Tab */}
+      {/* Create Post Tab */}
       <Tabs.Screen
         name="createPost"
         options={{

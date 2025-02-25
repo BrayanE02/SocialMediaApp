@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Alert, SafeAreaView, ScrollView } from 'react-native';
 import { EmailAuthProvider, getAuth, reauthenticateWithCredential, signOut, updateEmail, updatePassword } from 'firebase/auth';
 import { app, db } from '../../config/firebaseConfig';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker'; // Import Expo Image Picker
 import Styles from '../styles/tabsStyle'; // Shared tab styles
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 
 
 const EditProfileScreen = () => {
@@ -64,6 +65,23 @@ const EditProfileScreen = () => {
         router.push('/tabs/profile');
     };
 
+    const uploadProfileImage = async (uri: string) => {
+        try {
+            const storage = getStorage(app);
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const storageRef = ref(storage, `profilePictures/${currentUser?.uid}/profileImage.jpg`);
+
+            await uploadBytes(storageRef, blob);  // Upload image
+            const downloadURL = await getDownloadURL(storageRef);  // Get public URL
+            console.log("Image uploaded. URL:", downloadURL);
+            return downloadURL;
+        } catch (error) {
+            console.error("Upload error:", error);  // If permission denied, check Storage rules
+            throw error;
+        }
+    };
+
     // Function to pick a new profile image using Expo Image Picker
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -73,9 +91,9 @@ const EditProfileScreen = () => {
             quality: 0.5,
         });
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            // Use the first asset's uri
-            setProfileImage(result.assets[0].uri);
+        if (!result.canceled && result.assets?.length > 0) {
+            const downloadURL = await uploadProfileImage(result.assets[0].uri);  // Upload and get URL
+            setProfileImage(downloadURL);  // Set the URL for Firestore update
         }
     };
 
@@ -113,176 +131,187 @@ const EditProfileScreen = () => {
         return re.test(pwd);
     };
 
+
     // Function to save profile changes to Firestore and update Auth credentials
     const saveChanges = async () => {
-        if (currentUser) {
-            // Validate email if it has been changed
-            if (email && email !== currentUser.email && !isValidEmail(email)) {
-                Alert.alert('Invalid Email', 'Please enter a valid email address.');
-                return;
+        console.log("user presses save changes")
+
+        if (!currentUser) return;
+
+        await currentUser.reload();
+        const normalizedCurrentEmail = currentUser.email?.trim().toLowerCase() ?? '';
+        const normalizedEnteredEmail = email.trim().toLowerCase();
+
+        const isEmailChanged = normalizedEnteredEmail !== normalizedCurrentEmail;
+        const isPasswordChanged = password.trim() !== '';
+
+        // Step 1: Reauthenticate ONLY if email or password is changing
+        if ((isEmailChanged || isPasswordChanged) && currentPassword.trim() === '') {
+            Alert.alert('Reauthentication Required', 'Enter your current password to change email or password.');
+            return;
+        }
+
+        try {
+            // Step 2: Reauthenticate if needed
+            if ((isEmailChanged || isPasswordChanged) && currentPassword.trim() !== '') {
+                const credential = EmailAuthProvider.credential(currentUser.email!, currentPassword);
+                await reauthenticateWithCredential(currentUser, credential);
+                console.log("User reauthenticated.");
             }
 
-            // Validate password only if a new password is provided
-            if (password.trim() !== '' && !isValidPassword(password.trim())) {
-                Alert.alert(
-                    'Invalid Password',
-                    'Password must be at least 8 characters long and contain at least one number and one special character.'
-                );
-                return;
-            }
-
-            // If updating email or password, ensure the user has provided their current password
-            if ((email !== currentUser.email || password.trim() !== '') && currentPassword.trim() === '') {
-                Alert.alert('Reauthentication Required', 'Please enter your current password to update sensitive information.');
-                return;
-            }
-
-            try {
-                // Check if the username is taken
-                const usernameTaken = await isUsernameTaken();
-                if (usernameTaken) {
-                    Alert.alert('Username Unavailable', 'This username is already in use. Please choose another one.');
+            // Step 3: Handle email update
+            if (isEmailChanged) {
+                if (!isValidEmail(email)) {
+                    Alert.alert('Invalid Email', 'Please enter a valid email address.');
                     return;
                 }
-
-                // Reauthenticate if updating email or password
-                if ((email !== currentUser.email || password.trim() !== '') && currentPassword.trim() !== '') {
-                    const credential = EmailAuthProvider.credential(currentUser.email!, currentPassword);
-                    await reauthenticateWithCredential(currentUser, credential);
-                }
-
-                // Update email in Auth if it has changed
-                if (email && email !== currentUser.email) {
-                    await updateEmail(currentUser, email);
-                }
-
-                // Update password in Auth if a new password is provided
-                if (password.trim() !== '') {
-                    await updatePassword(currentUser, password);
-                }
-
-                // Update Firestore document with the new profile data
-                const userDocRef = doc(db, 'users', currentUser.uid);
-                await updateDoc(userDocRef, {
-                    displayName: username,
-                    bio: bio,
-                    photoURL: profileImage,
-                    email: email,
-                });
-
-                console.log('Profile updated successfully');
-                router.push('/tabs/profile');
-            } catch (error: any) {
-                console.error('Error updating profile:', error.message);
-                Alert.alert('Update Error', 'An error occurred while saving changes.');
+                await updateEmail(currentUser, email);
+                console.log("Email updated.");
             }
+
+            // Step 4: Handle password update
+            if (isPasswordChanged) {
+                if (!isValidPassword(password.trim())) {
+                    Alert.alert('Invalid Password', 'Password must be at least 8 characters long and contain at least one number and one special character.');
+                    return;
+                }
+                await updatePassword(currentUser, password);
+                console.log("Password updated.");
+            }
+
+            // Step 5: Refresh token if sensitive info changed
+            if (isEmailChanged || isPasswordChanged) {
+                await currentUser.getIdToken(true);
+                await currentUser.reload();
+                console.log("Token refreshed and user reloaded.");
+            }
+
+            // Step 6: Update Firestore profile (for profile image, username, bio)
+            const userDocRef = doc(db, 'users', currentUser.uid);
+            console.log("Updating Firestore document:", userDocRef.path);
+
+            await updateDoc(userDocRef, {
+                displayName: username,
+                bio,
+                photoURL: profileImage,  // Profile image can be updated without reauth
+            });
+            router.push('/tabs/profile');
+
+        } catch (error: any) {
+            console.error('Error updating profile:', error.message);
+            Alert.alert('Update Error', error.message);
         }
     };
 
+
     return (
-        <View style={Styles.container}>
-            {/* Header with go back arrow and title */}
-            <View style={styles.header}>
+        <SafeAreaView style={Styles.safeArea}>
+            <View style={Styles.topBar}>
+                <Text style={Styles.title}>pmo.</Text>
+                {/* Header with go back arrow and title */}
                 <TouchableOpacity onPress={goBack} style={styles.backButton}>
                     <Text style={styles.backButtonText}>←</Text>
                 </TouchableOpacity>
-                <Text style={[Styles.title, styles.headerTitle]}>Edit Profile</Text>
             </View>
+            <ScrollView>
+                <View style={Styles.container}>
 
-            {/* Profile Image */}
-            <View style={styles.imageContainer}>
-                <Image source={{ uri: profileImage }} style={styles.profileImage} />
-            </View>
+                    {/* Profile Image */}
+                    <View style={styles.imageContainer}>
+                        <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                    </View>
 
-            {/* Button to change profile image */}
-            <TouchableOpacity onPress={pickImage} style={styles.changeImageButton}>
-                <Text style={styles.changeImageButtonText}>Change Profile Image</Text>
-            </TouchableOpacity>
+                    {/* Button to change profile image */}
+                    <TouchableOpacity onPress={pickImage} style={styles.changeImageButton}>
+                        <Text style={styles.changeImageButtonText}>Change Profile Image</Text>
+                    </TouchableOpacity>
 
-            {/* Username Input */}
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Username</Text>
-                <TextInput
-                    value={username}
-                    onChangeText={setUsername}
-                    style={styles.textInput}
-                    placeholder="Enter new username"
-                    placeholderTextColor="#888"
-                />
-            </View>
-            {/* Bio Input */}
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Bio</Text>
-                <TextInput
-                    value={bio}
-                    onChangeText={setBio}
-                    style={[styles.textInput, styles.bioInput]}
-                    placeholder="Enter your bio"
-                    placeholderTextColor="#888"
-                    multiline
-                />
-            </View>
+                    {/* Username Input */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Username</Text>
+                        <TextInput
+                            value={username}
+                            onChangeText={setUsername}
+                            style={styles.textInput}
+                            placeholder="Enter new username"
+                            placeholderTextColor="#888"
+                        />
+                    </View>
+                    {/* Bio Input */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Bio</Text>
+                        <TextInput
+                            value={bio}
+                            onChangeText={setBio}
+                            style={[styles.textInput, styles.bioInput]}
+                            placeholder="Enter your bio"
+                            placeholderTextColor="#888"
+                            multiline
+                        />
+                    </View>
 
-            {/* Email Input */}
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email</Text>
-                <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    style={styles.textInput}
-                    placeholder="Enter new email"
-                    placeholderTextColor="#888"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                />
-            </View>
+                    {/* Email Input */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Email</Text>
+                        <TextInput
+                            value={email}
+                            onChangeText={setEmail}
+                            style={styles.textInput}
+                            placeholder="Enter new email"
+                            placeholderTextColor="#888"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+                    </View>
 
-            {/* Current Password Input (required for updating email or password) */}
-            {(email !== currentUser?.email || password.trim() !== '') && (
-                <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Current Password</Text>
-                    <TextInput
-                        value={currentPassword}
-                        onChangeText={setCurrentPassword}
-                        style={styles.textInput}
-                        placeholder="Enter your current password"
-                        placeholderTextColor="#888"
-                        secureTextEntry
-                    />
+                    {/* Current Password Input (required for updating email or password) */}
+                    {(email !== currentUser?.email || password.trim() !== '') && (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Current Password</Text>
+                            <TextInput
+                                value={currentPassword}
+                                onChangeText={setCurrentPassword}
+                                style={styles.textInput}
+                                placeholder="Enter your current password"
+                                placeholderTextColor="#888"
+                                secureTextEntry
+                            />
+                        </View>
+                    )}
+
+                    {/* Password Input */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>New Password</Text>
+                        <TextInput
+                            value={password}
+                            onChangeText={setPassword}
+                            style={styles.textInput}
+                            placeholder="Enter new password"
+                            placeholderTextColor="#888"
+                            secureTextEntry
+                        />
+                    </View>
+
+                    {/* Button to save changes */}
+                    <TouchableOpacity onPress={saveChanges} style={styles.saveButton}>
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                    </TouchableOpacity>
+
+                    {/* Logout Button */}
+                    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                        <Text style={styles.logoutButtonText}>Log Out</Text>
+                    </TouchableOpacity>
                 </View>
-            )}
-
-            {/* Password Input */}
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>New Password</Text>
-                <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    style={styles.textInput}
-                    placeholder="Enter new password"
-                    placeholderTextColor="#888"
-                    secureTextEntry
-                />
-            </View>
-
-            {/* Button to save changes */}
-            <TouchableOpacity onPress={saveChanges} style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-
-            {/* Logout Button */}
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-                <Text style={styles.logoutButtonText}>Log Out</Text>
-            </TouchableOpacity>
-        </View>
+            </ScrollView>
+        </SafeAreaView>
     );
-};
+}
 
 export default EditProfileScreen;
 
 const styles = StyleSheet.create({
     header: {
-        height: 75,
+        height: 50,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 10,
