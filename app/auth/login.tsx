@@ -56,7 +56,7 @@ export default function Login({ navigation }: { navigation: any }) {
 
     return (
         <View style={Styles.container}>
-            <Text style={Styles.title}>Social Media App</Text>
+            <Text style={Styles.title}>pmo.</Text>
             <Text style={Styles.subtitle}>Log In</Text>
 
             <TextInput

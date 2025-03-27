@@ -1,35 +1,30 @@
-import { Stack, Tabs } from "expo-router";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { Slot, Stack } from "expo-router";
 import { useEffect, useState } from "react";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "../config/firebaseConfig";
-import { Ionicons } from "@expo/vector-icons";
 
-export default function Layout() {
-
+export default function RootLayout() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    const auth = getAuth(app);
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsLoggedIn(!!user); // Set logged-in state if there's a user
+    const unsubscribe = onAuthStateChanged(getAuth(app), (user) => {
+      setIsLoggedIn(!!user);
+      setAuthChecked(true);
     });
-    return unsubscribe; // Clean up the listener on unmount
+    return unsubscribe;
   }, []);
 
+  if (!authChecked) return null;
+
   if (!isLoggedIn) {
-    // Show Stack layout for login/signup (not logged in)
     return (
-      <Stack initialRouteName="auth/login" screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/signup" />
       </Stack>
     );
   }
 
-  // Once login show tabs
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="tabs" />
-    </Stack>
-  );
+  return <Slot />;
 }

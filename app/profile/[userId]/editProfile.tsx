@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, Alert, SafeAreaView, ScrollView } from 'react-native';
 import { EmailAuthProvider, getAuth, reauthenticateWithCredential, signOut, updateEmail, updatePassword } from 'firebase/auth';
-import { app, db } from '../../config/firebaseConfig';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker'; // Import Expo Image Picker
-import Styles from '../styles/tabsStyle'; // Shared tab styles
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import Styles from '../../styles/tabsStyle';
+import { app, db } from '@/config/firebaseConfig';
 
 
 const EditProfileScreen = () => {
@@ -20,6 +20,19 @@ const EditProfileScreen = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [currentPassword, setCurrentPassword] = useState(''); // Required for reauthentication
+
+    async function ensureFollowersSubcollection(userId: string) {
+        try {
+            // This writes a dummy document named "initDoc" under users/{userId}/followers
+            await setDoc(doc(db, 'users', userId, 'followers', 'initDoc'), {
+                createdAt: serverTimestamp(),
+                dummy: true
+            });
+            console.log('Followers subcollection ensured with a dummy doc.');
+        } catch (error) {
+            console.error('Error ensuring followers subcollection:', error);
+        }
+    }
 
     // Fetch the current user's data from Firestore
     useEffect(() => {
@@ -39,6 +52,10 @@ const EditProfileScreen = () => {
                         setUsername(currentUser.displayName || '');
                         setProfileImage(currentUser.photoURL || 'https://via.placeholder.com/100');
                     }
+
+                    // Call our helper to ensure a "followers" subcollection is created
+                    await ensureFollowersSubcollection(currentUser.uid);
+
                 } catch (error: any) {
                     console.error('Error fetching user data:', error.message);
                 }
@@ -62,7 +79,7 @@ const EditProfileScreen = () => {
 
     // Function to navigate back to the Profile screen
     const goBack = () => {
-        router.push('/tabs/profile');
+        router.push('/tabs/profile/');
     };
 
     const uploadProfileImage = async (uri: string) => {
@@ -152,11 +169,21 @@ const EditProfileScreen = () => {
         }
 
         try {
-            // Step 2: Reauthenticate if needed
+            // Reauthenticate if needed
             if ((isEmailChanged || isPasswordChanged) && currentPassword.trim() !== '') {
                 const credential = EmailAuthProvider.credential(currentUser.email!, currentPassword);
                 await reauthenticateWithCredential(currentUser, credential);
                 console.log("User reauthenticated.");
+            }
+
+            // Is username taken
+            if (isEmailChanged) {
+                if (!isValidEmail(email)) {
+                    Alert.alert('Invalid Email', 'Please enter a valid email address.');
+                    return;
+                }
+                await updateEmail(currentUser, email);
+                console.log("Email updated.");
             }
 
             // Step 3: Handle email update
@@ -195,7 +222,7 @@ const EditProfileScreen = () => {
                 bio,
                 photoURL: profileImage,  // Profile image can be updated without reauth
             });
-            router.push('/tabs/profile');
+            router.push(`/tabs/profile/${currentUser.uid}`);
 
         } catch (error: any) {
             console.error('Error updating profile:', error.message);

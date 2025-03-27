@@ -15,7 +15,7 @@ import {
     collection
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import { app, db } from '@/config/firebaseConfig';
+import { app, db } from '../../config/firebaseConfig';
 import Styles from '../styles/tabsStyle';
 import PostItem from '../../components/post';
 
@@ -28,21 +28,15 @@ interface Post {
 }
 
 export default function ProfileScreen() {
-    const { userId: routeUserId } = useLocalSearchParams();
+    const { userId } = useLocalSearchParams<{ userId: string }>();
     const auth = getAuth(app);
     const currentUser = auth.currentUser;
-    const currentUserId = currentUser?.uid;
-
-    // Decide which profile we're looking at
-    const userId = typeof routeUserId === 'string' ? routeUserId : currentUserId;
-    const isOwnProfile = userId === currentUserId;
 
     const [userData, setUserData] = useState<any>(null);
     const [userPosts, setUserPosts] = useState<Post[]>([]);
     const [isFollowing, setIsFollowing] = useState(false);
 
     const [followersCount, setFollowersCount] = useState(0);
-    const [followingCount, setFollowingCount] = useState(0);
 
     useEffect(() => {
         if (!userId) return;
@@ -73,19 +67,6 @@ export default function ProfileScreen() {
         });
         return () => unsubscribe();
     }, [userId, currentUser]);
-
-
-    // Listen to the target user's "following" subcollection in real time
-    useEffect(() => {
-        if (!userId) return;
-
-        const followingRef = collection(db, 'users', userId, 'following');
-        const unsubscribe = onSnapshot(followingRef, (snapshot) => {
-            setFollowingCount(snapshot.size);
-        });
-
-        return () => unsubscribe();
-    }, [userId]);
 
     // Listen to the target user's public posts
     useEffect(() => {
@@ -205,7 +186,7 @@ export default function ProfileScreen() {
                                     </View>
                                     <TouchableOpacity
                                         style={styles.statItem}
-                                        onPress={() => router.push(`/profile/${userId}/followers`)}
+                                        onPress={() => router.push(`/tabs/profile/${userId}/followers`)}
                                     >
                                         <Text style={styles.statNumber}>{followersCount}</Text>
                                         <Text style={styles.statLabel}>Followers</Text>
@@ -213,16 +194,16 @@ export default function ProfileScreen() {
 
                                     <TouchableOpacity
                                         style={styles.statItem}
-                                        onPress={() => router.push(`/profile/${userId}/following`)}
+                                        onPress={() => router.push(`/tabs/profile/${userId}/following`)}
                                     >
-                                        <Text style={styles.statNumber}>{followingCount}</Text>
+                                        <Text style={styles.statNumber}>{userData?.following ?? 0}</Text>
                                         <Text style={styles.statLabel}>Following</Text>
                                     </TouchableOpacity>
                                 </View>
-                                {isOwnProfile ? (
+                                {currentUser?.uid === userId ? (
                                     <TouchableOpacity
                                         style={styles.editButton}
-                                        onPress={() => router.push(`/profile/${userId}/editProfile`)}
+                                        onPress={() => router.push(`/tabs/profile/${userId}/editProfile`)}
                                     >
                                         <Text style={styles.editButtonText}>Edit Profile</Text>
                                     </TouchableOpacity>

@@ -44,16 +44,28 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
 
     // Helper function to check if a username already exists in Firestore
     const checkUsernameExists = async (username: string): Promise<boolean> => {
-        const q = query(collection(db, "users"), where("username", "==", username));
-        const querySnapshot = await getDocs(q);
-        return !querySnapshot.empty;
+        console.log("Querying Firestore for username:", username);
+        try {
+            const q = query(collection(db, "users"), where("username", "==", username));
+            const querySnapshot = await getDocs(q);
+            console.log("Query complete. Documents found:", querySnapshot.empty ? "No" : "Yes");
+            return !querySnapshot.empty;
+        } catch (error) {
+            console.error("Error querying Firestore:", error);
+            return false;
+        }
     };
 
     const handleSignUp = async () => {
         console.log("Sign Up button pressed"); // Debug log
-        //if (!validateInputs()) return;
+
+        if (!validateInputs()) {
+            console.log("Validation failed:", errors);
+            return;
+        };
 
         // Check if the username is already taken
+        console.log("Checking if username exists...");
         if (await checkUsernameExists(username)) {
             setErrors((prevErrors) => ({
                 ...prevErrors,
@@ -103,7 +115,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
                 <Text style={Styles.backColor}>←</Text>
             </TouchableOpacity>
 
-            <Text style={Styles.title}>Social Media App</Text>
+            <Text style={Styles.title}>pmo.</Text>
             <Text style={Styles.subtitle}>Sign Up</Text>
 
             <TextInput

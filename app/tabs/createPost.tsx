@@ -1,13 +1,13 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, TextInput, Button, Image, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native'; // React Navigation hook
 import { db, storage } from '../../config/firebaseConfig';
 import Styles from '../styles/tabsStyle';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import Video from 'expo-av/build/Video';
@@ -17,13 +17,38 @@ export default function CreatePostScreen() {
     const navigation = useNavigation();
     const auth = getAuth();
     const currentUser = auth.currentUser;
-
+    if (!currentUser) {
+        Alert.alert("Authentication error", "You must be logged in to upload an image.");
+        return;
+    }
     // Local state
     const [postText, setPostText] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [videoUri, setVideoUri] = useState<string | null>(null);
-    const [visibility, setVisibility] = useState<'Everyone' | 'Followers' | 'Groups'>('Everyone');
+    const [visibility, setVisibility] = useState<'Public' | 'Followers' | 'Groups'>('Public');
     const [uploading, setUploading] = useState(false);
+    const [userData, setUserData] = useState<any>(null);
+
+    const fetchUserData = async () => {
+        if (currentUser) {
+            try {
+                const userDocRef = doc(db, 'users', currentUser.uid);
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    setUserData(docSnap.data());
+                }
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+            }
+        }
+    };
+
+    useFocusEffect(() => {
+        fetchUserData();
+        return () => { };
+    });
+
+
 
     // Pick an image from the library
     const pickMedia = async () => {
@@ -38,6 +63,7 @@ export default function CreatePostScreen() {
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
             const asset = result.assets[0];
+            console.log("Selected media URI:", asset.uri);
             if (asset.uri.endsWith('.mov') || asset.uri.endsWith('.mp4')) {
                 setVideoUri(asset.uri);
                 setSelectedImage(null);
@@ -49,68 +75,99 @@ export default function CreatePostScreen() {
     };
 
     // Upload image to Firebase Storage
-    const uploadImageAsync = async (uri: string): Promise<string> => {
+    const uploadImageAsync = async (uri: string, userId: string): Promise<string> => {
+        if (!userId) throw new Error("User is not authenticated.");
+
         const response = await fetch(uri);
         const blob = await response.blob();
-        const filename = uri.substring(uri.lastIndexOf('/') + 1);
+        const filename = `${userId}/${Date.now()}.jpg`; // Store images under the user ID
         const storageRef = ref(storage, `images/${filename}`);
+
         await uploadBytes(storageRef, blob);
         return getDownloadURL(storageRef);
     };
 
     // Upload video to Firebase Storage
-    const uploadVideoAsync = async (uri: string): Promise<string> => {
+    const uploadVideoAsync = async (uri: string, userId: string): Promise<string> => {
+        if (!userId) throw new Error("User is not authenticated.");
+
         const response = await fetch(uri);
         const blob = await response.blob();
-        const filename = uri.substring(uri.lastIndexOf('/') + 1);
+        const filename = `${userId}/${Date.now()}.mp4`; // Store videos under the user ID
         const storageRef = ref(storage, `videos/${filename}`);
+
         await uploadBytes(storageRef, blob);
         return getDownloadURL(storageRef);
     };
 
+    async function getFollowers(ownerUid: string): Promise<string[]> {
+        // Query the /followers/ownerUid/following/ subcollection
+        // Return an array of user IDs
+        const snapshot = await getDocs(collection(db, "Followers ", ownerUid, "following"));
+        return snapshot.docs.map(doc => doc.id);
+    }
 
+    async function getGroupMembers(groupId: string): Promise<string[]> {
+        const snapshot = await getDocs(collection(db, "groups", groupId, "members"));
+        return snapshot.docs.map(doc => doc.id);
+    }
 
     // Submit the post
     const handlePost = async () => {
         if (!postText.trim()) {
-            Alert.alert('Please enter some text for your post.');
+            Alert.alert("Please enter some text for your post.");
             return;
         }
         if (!currentUser) {
-            Alert.alert('You must be logged in to create a post.');
+            Alert.alert("You must be logged in to create a post.");
             return;
         }
 
         setUploading(true);
+
         try {
+            // Upload image or video if there is one
             let mediaUrl: string | null = null;
             if (selectedImage) {
-                mediaUrl = await uploadImageAsync(selectedImage);
+                mediaUrl = await uploadImageAsync(selectedImage, currentUser.uid);
             } else if (videoUri) {
-                mediaUrl = await uploadVideoAsync(videoUri);
+                mediaUrl = await uploadVideoAsync(videoUri, currentUser.uid);
             }
 
+            // Determine if the post is public
+            const isPublic = visibility === "Public";
+
+            // Build the allowedUserIds array (owner always included)
+            let allowedUserIds = [currentUser.uid];
+            if (visibility === "Followers") {
+                const followers = await getFollowers(currentUser.uid);
+                allowedUserIds = [...allowedUserIds, ...followers];
+            } else if (visibility === "Groups") {
+                // fetch group members for the chosen group if needed
+                // allowedUserIds = [...allowedUserIds, ...groupMembers];
+            }
+
+            // Create the new post document
             const newPost = {
                 userId: currentUser.uid,
                 text: postText,
                 mediaUrl: mediaUrl,
-                visibility: visibility,
+                public: isPublic,
+                allowedUserIds: allowedUserIds,
                 createdAt: serverTimestamp(),
             };
 
-            await addDoc(collection(db, 'posts'), newPost);
-            Alert.alert('Post created successfully!');
-            router.push('/tabs/feed'); // e.g., go to feed, adjust as needed
+            // Save the document (only one addDoc call)
+            await addDoc(collection(db, "posts"), newPost);
+            Alert.alert("Post created successfully!");
+            router.push("/tabs/feed");
         } catch (error) {
-            console.error(error);
-            Alert.alert('Error creating post. Please try again.');
+            console.error("Error creating post:", error);
+            Alert.alert("Error creating post. Please try again.");
         } finally {
             setUploading(false);
         }
     };
-
-    //  user avatar
-    const userAvatarUri = currentUser?.photoURL || 'https://via.placeholder.com/150';
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -124,16 +181,24 @@ export default function CreatePostScreen() {
                 </View>
                 <View style={styles.container}>
 
-                    <ScrollView
-                        style={styles.scrollView}
-                        contentContainerStyle={styles.scrollContent}
-                    >
+                    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
 
-                        {/* User row with avatar and visibility label 
+                        {/* User row with avatar and username */}
                         <View style={styles.userRow}>
-                            <Image source={{ uri: userAvatarUri }} style={styles.avatar} />
+                            {userData?.photoURL ? (
+                                <Image
+                                    source={{ uri: userData.photoURL }}
+                                    style={styles.profileImage}
+                                />
+                            ) : (
+                                <View style={styles.profileImagePlaceholder}>
+                                    <Ionicons name="person-circle-outline" size={40} color="#fff" />
+                                </View>
+                            )}
+                            {userData?.username && (
+                                <Text style={styles.username}>{userData.username}</Text>
+                            )}
                         </View>
-                        */}
 
                         {/* post preview */}
                         <View style={styles.textInputContainer}>
@@ -169,13 +234,12 @@ export default function CreatePostScreen() {
                             <View style={styles.pickerWrapper}>
                                 <Picker
                                     selectedValue={visibility}
-                                    onValueChange={(value) => setVisibility(value as 'Everyone' | 'Followers' | 'Groups')}
+                                    onValueChange={(value) => setVisibility(value as 'Public' | 'Followers' | 'Groups')}
                                     style={styles.picker}
-                                    dropdownIconColor="#fff"
                                 >
-                                    <Picker.Item label="Everyone" value="Everyone" />
-                                    <Picker.Item label="Followers" value="Followers" />
-                                    <Picker.Item label="Groups" value="Groups" />
+                                    <Picker.Item label="Public" value="Public" color='#fff' />
+                                    <Picker.Item label="Followers" value="Followers" color='#fff' />
+                                    <Picker.Item label="Groups" value="Groups" color='#fff' />
                                 </Picker>
                             </View>
                         </View>
@@ -232,16 +296,27 @@ const styles = StyleSheet.create({
     },
     /* User row styles */
     userRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        marginTop: 12,
-        marginBottom: 10,
+        flexDirection: 'row',       // side-by-side layout
+        alignItems: 'center',       // vertically center
+        margin: 16,
     },
-    avatar: {
+    profileImage: {
         width: 40,
         height: 40,
         borderRadius: 20,
+    },
+    profileImagePlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+    },
+    textContainer: {
+        flex: 1,
+
+    },
+    username: {
+        color: '#fff',
+        fontWeight: 'bold',
     },
     /* Text input container with image icon overlay */
     textInputContainer: {
