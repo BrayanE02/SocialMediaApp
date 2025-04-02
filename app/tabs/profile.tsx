@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { app, db } from '@/config/firebaseConfig';
 import Styles from '../styles/tabsStyle';
 import PostItem from '../../components/post';
+import TopBar from '@/components/TopBar';
 
 interface Post {
     id: string;
@@ -177,9 +178,7 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={Styles.container}>
-            <View style={Styles.topBar}>
-                <Text style={Styles.title}>pmo.</Text>
-            </View>
+            <TopBar showBell={false} />
             <FlatList
                 data={userPosts}
                 keyExtractor={(item) => item.id}

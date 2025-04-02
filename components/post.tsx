@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
-import { arrayRemove, arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import { router } from 'expo-router';
@@ -94,22 +94,36 @@ const PostItem: React.FC<PostItemProps> = ({ post, currentPlayingId, onPlay }) =
     const handleLike = async () => {
         if (!currentUser) return;
         const postRef = doc(db, 'posts', post.id);
+
         try {
             if (liked) {
-                // Remove like if already liked
+                // Remove like
                 await updateDoc(postRef, {
                     likedBy: arrayRemove(currentUser.uid),
                 });
             } else {
-                // Add like if not already liked
+                // Add like
                 await updateDoc(postRef, {
                     likedBy: arrayUnion(currentUser.uid),
                 });
+
+                // Write notification only if not liking your own post
+                if (currentUser.uid !== post.userId) {
+                    await addDoc(collection(db, 'notifications'), {
+                        type: 'like',
+                        postId: post.id,
+                        fromUserId: currentUser.uid,
+                        toUserId: post.userId,
+                        createdAt: Timestamp.now(),
+                        read: false
+                    });
+                }
             }
         } catch (error) {
-            console.error('Error updating like:', error);
+            console.error('Error updating like or writing notification:', error);
         }
     };
+
 
 
     // Check if the media is a video

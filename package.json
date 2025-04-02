@@ -15,11 +15,12 @@
     "preset": "jest-expo"
   },
   "dependencies": {
-    "expo": "~52.0.38",
     "@expo/vector-icons": "^14.0.2",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-picker/picker": "2.9.0",
     "@react-navigation/bottom-tabs": "^7.2.0",
+    "date-fns": "^4.1.0",
+    "expo": "~52.0.38",
     "expo-av": "~15.0.2",
     "expo-blur": "~14.0.3",
     "expo-constants": "~17.0.8",
@@ -35,14 +36,14 @@
     "expo-video": "~2.0.6",
     "expo-web-browser": "~14.0.2",
     "firebase": "^11.3.1",
+    "jest-expo": "~52.0.6",
     "react-dom": "18.3.1",
+    "react-native": "0.76.7",
     "react-native-reanimated": "~3.16.1",
     "react-native-vector-icons": "^10.2.0",
     "react-native-video": "^6.10.2",
     "react-native-web": "~0.19.13",
-    "react-native-webview": "13.12.5",
-    "react-native": "0.76.7",
-    "jest-expo": "~52.0.6"
+    "react-native-webview": "13.12.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

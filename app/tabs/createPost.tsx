@@ -12,6 +12,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import Video from 'expo-av/build/Video';
 import { ResizeMode } from 'expo-av';
+import TopBar from '@/components/TopBar';
 
 export default function CreatePostScreen() {
     const navigation = useNavigation();
@@ -175,10 +176,7 @@ export default function CreatePostScreen() {
                 style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-                {/* Custom top bar: "Social Media App" on the left */}
-                <View style={Styles.topBar}>
-                    <Text style={Styles.title}>pmo.</Text>
-                </View>
+                <TopBar showBell={false} />
                 <View style={styles.container}>
 
                     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -317,6 +315,7 @@ const styles = StyleSheet.create({
     username: {
         color: '#fff',
         fontWeight: 'bold',
+        marginLeft: 10,
     },
     /* Text input container with image icon overlay */
     textInputContainer: {

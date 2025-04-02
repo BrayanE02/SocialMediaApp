@@ -1,16 +1,20 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, Image } from 'react-native';
 import Styles from '../styles/tabsStyle';
 import PostItem from '../../components/post';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { getAuth } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/config/firebaseConfig';
+import TopBar from '../../components/TopBar';
+
 
 export default function FeedScreen() {
     const auth = getAuth();
     const currentUser = auth.currentUser;
+
+    const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
     const [userPosts, setUserPosts] = useState<any[]>([]);
     const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
@@ -76,11 +80,29 @@ export default function FeedScreen() {
         }, [currentUser])
     );
 
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const notifQuery = query(
+            collection(db, 'notifications'),
+            where('toUserId', '==', currentUser.uid),
+            where('read', '==', false)
+        );
+
+        const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
+            setHasUnreadNotifications(!snapshot.empty);
+        });
+
+        return () => unsubscribe();
+    }, [currentUser]);
+
+
     return (
         <SafeAreaView style={Styles.safeArea}>
-            <View style={Styles.topBar}>
-                <Text style={Styles.title}>pmo.</Text>
-            </View>
+            <TopBar
+                hasUnread={hasUnreadNotifications}
+                onBellPress={() => router.push('/activityCenter/activityCenter')}
+            />
             <FlatList
                 data={userPosts}
                 keyExtractor={(item) => item.id}
