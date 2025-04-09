@@ -13,6 +13,7 @@ interface Post {
     mediaUrl?: string;
     userId: string;
     likedBy?: string[];
+    groupId?: string;
 }
 
 interface PostItemProps {
@@ -31,6 +32,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, currentPlayingId, onPlay }) =
         photoURL?: string;
         username?: string;
     }>({});
+    const [groupName, setGroupName] = useState<string | null>(null);
 
     // State for like functionality
     const auth = getAuth();
@@ -57,6 +59,26 @@ const PostItem: React.FC<PostItemProps> = ({ post, currentPlayingId, onPlay }) =
 
         fetchUserProfile();
     }, [post.userId]);
+
+    useEffect(() => {
+        const fetchGroupName = async () => {
+            if (post.groupId) {
+                try {
+                    const groupDocRef = doc(db, 'groups', post.groupId);
+                    const docSnap = await getDoc(groupDocRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setGroupName(data.name || 'Unnamed Group');
+                    }
+                } catch (error) {
+                    console.error('Error fetching group name:', error);
+                }
+            }
+        };
+
+        fetchGroupName();
+    }, [post.groupId]);
+
 
     // Update like state whenever the post's likedBy field changes
     useEffect(() => {
@@ -169,6 +191,13 @@ const PostItem: React.FC<PostItemProps> = ({ post, currentPlayingId, onPlay }) =
                 </View>
             </View>
 
+            {groupName && (
+                <View style={styles.groupTag}>
+                    <Ionicons name="people-outline" size={16} color="#fff" />
+                    <Text style={styles.groupName}>{groupName}</Text>
+                </View>
+            )}
+
             {/* Post text (if any) */}
             {post.text && <Text style={styles.postText}>{post.text}</Text>}
 
@@ -244,6 +273,22 @@ const styles = StyleSheet.create({
     username: {
         color: '#fff',
         fontWeight: 'bold',
+    },
+    groupTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+        backgroundColor: '#333',
+        paddingVertical: 2,
+        paddingHorizontal: 8,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+    },
+    groupName: {
+        color: '#fff',
+        marginLeft: 6,
+        fontSize: 14,
+        fontWeight: '500',
     },
     postText: {
         color: '#fff',

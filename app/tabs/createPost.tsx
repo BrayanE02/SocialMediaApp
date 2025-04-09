@@ -3,7 +3,7 @@ import { View, Text, TextInput, Button, Image, StyleSheet, TouchableOpacity, Act
 import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native'; // React Navigation hook
 import { db, storage } from '../../config/firebaseConfig';
 import Styles from '../styles/tabsStyle';
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Video from 'expo-av/build/Video';
 import { ResizeMode } from 'expo-av';
 import TopBar from '@/components/TopBar';
+import groups from './groups';
 
 export default function CreatePostScreen() {
     const navigation = useNavigation();
@@ -22,13 +23,18 @@ export default function CreatePostScreen() {
         Alert.alert("Authentication error", "You must be logged in to upload an image.");
         return;
     }
+
     // Local state
     const [postText, setPostText] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [videoUri, setVideoUri] = useState<string | null>(null);
     const [visibility, setVisibility] = useState<'Public' | 'Followers' | 'Groups'>('Public');
+    const [groups, setGroups] = useState<any[]>([]);
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [userGroups, setUserGroups] = useState<any[]>([]);
     const [uploading, setUploading] = useState(false);
     const [userData, setUserData] = useState<any>(null);
+
 
     const fetchUserData = async () => {
         if (currentUser) {
@@ -37,6 +43,24 @@ export default function CreatePostScreen() {
                 const docSnap = await getDoc(userDocRef);
                 if (docSnap.exists()) {
                     setUserData(docSnap.data());
+                    // First fetch all groups
+                    const groupSnapshot = await getDocs(collection(db, 'groups'));
+                    const allGroups = groupSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                    }));
+
+                    // Then check which groups have the currentUser as a member
+                    const myGroups: any[] = [];
+
+                    for (const group of allGroups) {
+                        const memberDoc = await getDoc(doc(db, 'groups', group.id, 'members', currentUser.uid));
+                        if (memberDoc.exists()) {
+                            myGroups.push(group);
+                        }
+                    }
+
+                    setUserGroups(myGroups);
                 }
             } catch (error) {
                 console.error("Error fetching user data:", error);
@@ -49,6 +73,43 @@ export default function CreatePostScreen() {
         return () => { };
     });
 
+    useFocusEffect(
+        useCallback(() => {
+            setPostText('');
+            setSelectedImage(null);
+            setVideoUri(null);
+            setVisibility('Public');
+            setSelectedGroupId(null);
+        }, [])
+    );
+
+
+    useFocusEffect(
+        useCallback(() => {
+            const fetchGroups = async () => {
+                if (!currentUser) return;
+
+                try {
+                    const q = query(
+                        collection(db, 'groups'),
+                        where('members', 'array-contains', currentUser.uid)
+                    );
+
+                    const snapshot = await getDocs(q);
+                    const fetchedGroups = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                    }));
+
+                    setGroups(fetchedGroups);
+                } catch (error) {
+                    console.error("Error fetching groups:", error);
+                }
+            };
+
+            fetchGroups();
+        }, [currentUser])
+    );
 
 
     // Pick an image from the library
@@ -104,7 +165,7 @@ export default function CreatePostScreen() {
     async function getFollowers(ownerUid: string): Promise<string[]> {
         // Query the /followers/ownerUid/following/ subcollection
         // Return an array of user IDs
-        const snapshot = await getDocs(collection(db, "Followers ", ownerUid, "following"));
+        const snapshot = await getDocs(collection(db, "users", ownerUid, "followers"));
         return snapshot.docs.map(doc => doc.id);
     }
 
@@ -138,25 +199,56 @@ export default function CreatePostScreen() {
             // Determine if the post is public
             const isPublic = visibility === "Public";
 
-            // Build the allowedUserIds array (owner always included)
-            let allowedUserIds = [currentUser.uid];
-            if (visibility === "Followers") {
-                const followers = await getFollowers(currentUser.uid);
-                allowedUserIds = [...allowedUserIds, ...followers];
-            } else if (visibility === "Groups") {
-                // fetch group members for the chosen group if needed
-                // allowedUserIds = [...allowedUserIds, ...groupMembers];
-            }
-
-            // Create the new post document
-            const newPost = {
+            // Build the base post object
+            const newPost: {
+                userId: string;
+                text: string;
+                mediaUrl: string | null;
+                public: boolean;
+                createdAt: any;
+                allowedUserIds?: string[];
+                groupId?: string | null;
+            } = {
                 userId: currentUser.uid,
                 text: postText,
                 mediaUrl: mediaUrl,
                 public: isPublic,
-                allowedUserIds: allowedUserIds,
                 createdAt: serverTimestamp(),
             };
+
+            // Followers-only logic
+            if (visibility === "Followers") {
+                try {
+                    const followers = await getFollowers(currentUser.uid);
+                    newPost.allowedUserIds = [currentUser.uid, ...followers];
+                } catch (err) {
+                    console.error("Error getting followers:", err);
+                    setUploading(false);
+                    return;
+                }
+            }
+
+            // Group post logic
+            if (visibility === "Groups") {
+                if (!selectedGroupId) {
+                    Alert.alert("Please select a group.");
+                    setUploading(false);
+                    return;
+                }
+
+                try {
+                    const membersSnapshot = await getDocs(collection(db, "groups", selectedGroupId, "members"));
+                    const memberIds = membersSnapshot.docs.map((doc) => doc.id);
+                    newPost.allowedUserIds = [currentUser.uid, ...memberIds];
+                    newPost.groupId = selectedGroupId;
+                } catch (err) {
+                    console.error("Error getting group members:", err);
+                    setUploading(false);
+                    return;
+                }
+            }
+
+            console.log('Creating post with data:', newPost);
 
             // Save the document (only one addDoc call)
             await addDoc(collection(db, "posts"), newPost);
@@ -241,6 +333,24 @@ export default function CreatePostScreen() {
                                 </Picker>
                             </View>
                         </View>
+                        {visibility === 'Groups' && (
+                            <View style={styles.dropdownContainer}>
+                                <Text style={styles.label}>Select Group</Text>
+                                <View style={styles.pickerWrapper}>
+                                    <Picker
+                                        selectedValue={selectedGroupId}
+                                        onValueChange={(value) => setSelectedGroupId(value)}
+                                        style={styles.picker}
+                                    >
+                                        <Picker.Item label="Select a group..." value={null} color="#888" />
+                                        {groups.map((group) => (
+                                            <Picker.Item key={group.id} label={group.name || 'Unnamed Group'} value={group.id} color="#fff" />
+                                        ))}
+                                    </Picker>
+                                </View>
+                            </View>
+                        )}
+
 
                         {/* POST button under the text area & dropdown */}
                         <TouchableOpacity

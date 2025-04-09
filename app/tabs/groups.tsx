@@ -1,36 +1,63 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TextInput, Alert, FlatList, TouchableOpacity, Image } from 'react-native';
 import Styles from '../styles/tabsStyle';
 import { User } from '../types/Users';
 import { getAuth } from 'firebase/auth';
-import { collection, doc, onSnapshot, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from '@/config/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import TopBar from '@/components/TopBar';
+import { router, useFocusEffect } from 'expo-router';
 
 export default function GroupsScreen() {
     const [search, setSearch] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+    const [groups, setGroups] = useState<any[]>([]);
+
     const auth = getAuth();
     const currentUser = auth.currentUser;
-    // Real time listener to fetch all users from Firestore
+
+    // Load users & groups on mount
     useEffect(() => {
         const q = query(collection(db, 'users'));
-
-        const unsubscribe = onSnapshot(q, snapshot => {
+        const unsubscribeUsers = onSnapshot(q, snapshot => {
             const fetched = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
             })) as User[];
 
-            // Filter out the current user from the list
             setUsers(fetched.filter(user => user.id !== currentUser?.uid));
         });
 
-        // Clean up listener on unmount
-        return () => unsubscribe();
+        if (!currentUser) return;
+
+        const groupQuery = query(
+            collection(db, 'groups'),
+            where('members', 'array-contains', currentUser.uid)
+        );
+
+        const unsubscribeGroups = onSnapshot(groupQuery, snapshot => {
+            const userGroups = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
+            setGroups(userGroups);
+        });
+
+        return () => {
+            unsubscribeUsers();
+            unsubscribeGroups();
+        };
     }, []);
+
+    // Reset screen state on focus
+    useFocusEffect(
+        useCallback(() => {
+            setSearch('');
+            setSelectedUsers([]);
+        }, [])
+    );
 
     // Add/remove user from the selected list
     const toggleUser = (id: string) => {
@@ -41,28 +68,21 @@ export default function GroupsScreen() {
         );
     };
 
-    // Create group document in Firestore
-    const createGroup = async () => {
-        if (!selectedUsers.length) {
+    // Navigates to group confirmation screen
+    const goToGroupConfirm = () => {
+        const selected = users.filter(user => selectedUsers.includes(user.id));
+
+        if (!selected.length) {
             Alert.alert('Select users to create a group.');
             return;
         }
 
-        try {
-            const groupId = `${currentUser?.uid}_${Date.now()}`; // unique group ID
-
-            await setDoc(doc(db, 'groups', groupId), {
-                createdBy: currentUser?.uid,
-                members: [...selectedUsers, currentUser?.uid], // include yourself
-                createdAt: serverTimestamp(),
-            });
-
-            Alert.alert('Group created!');
-            setSelectedUsers([]); // clear selected users after group creation
-        } catch (error: any) {
-            console.error('Error creating group:', error.message);
-            Alert.alert('Failed to create group');
-        }
+        router.push({
+            pathname: '/groups/createGroupConfirm',
+            params: {
+                selectedUsers: encodeURIComponent(JSON.stringify(selected)),
+            },
+        });
     };
 
     // filter users based on search text
@@ -70,14 +90,18 @@ export default function GroupsScreen() {
         user.username.toLowerCase().includes(search.toLowerCase())
     );
 
+    const filteredGroups = groups.filter(group =>
+        group.name?.toLowerCase().includes(search.toLowerCase())
+    );
+
+    const combinedSearchResults = [
+        ...filteredGroups.map(group => ({ ...group, _type: 'group' })),
+        ...filteredUsers.map(user => ({ ...user, _type: 'user' })),
+    ];
     return (
         <SafeAreaView style={Styles.safeArea}>
-            {/* Header */}
             <TopBar showBell={false} />
-
             <View style={Styles.container}>
-
-                {/* Search */}
                 <TextInput
                     placeholder="Search users..."
                     placeholderTextColor="#888"
@@ -86,51 +110,82 @@ export default function GroupsScreen() {
                     style={styles.searchBar}
                 />
 
-                {/* List of users */}
                 <FlatList
-                    data={filteredUsers}
+                    data={search ? combinedSearchResults : groups}
                     keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <View style={styles.userItem}>
-                            {/* Avatar or default icon */}
-                            {item.avatar ? (
-                                <Image source={{ uri: item.avatar }} style={styles.avatar} />
-                            ) : (
-                                <Ionicons name="person-circle-outline" size={50} color="#fff" />
-                            )}
-
-                            {/* Username & Add/Added button */}
-                            <View style={{ marginLeft: 10, flex: 1 }}>
-                                <Text style={styles.username}>{item.username || 'Unknown'}</Text>
-
-                                {currentUser && currentUser.uid !== item.id && (
+                    renderItem={({ item }) => {
+                        if (search) {
+                            if (item._type === 'user') {
+                                return (
+                                    <View style={styles.userItem}>
+                                        {item.avatar ? (
+                                            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                                        ) : (
+                                            <Ionicons name="person-circle-outline" size={50} color="#fff" />
+                                        )}
+                                        <View style={{ marginLeft: 10, flex: 1 }}>
+                                            <Text style={styles.username}>{item.username || 'Unknown'}</Text>
+                                            {currentUser && currentUser.uid !== item.id && (
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.addButton,
+                                                        selectedUsers.includes(item.id) && styles.added,
+                                                    ]}
+                                                    onPress={() => toggleUser(item.id)}
+                                                >
+                                                    <Text style={styles.addButtonText}>
+                                                        {selectedUsers.includes(item.id) ? 'Added to group' : 'Add to group'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            } else if (item._type === 'group') {
+                                return (
                                     <TouchableOpacity
-                                        style={[
-                                            styles.addButton,
-                                            selectedUsers.includes(item.id) && styles.added,
-                                        ]}
-                                        onPress={() => toggleUser(item.id)}
+                                        style={styles.userItem}
+                                        onPress={() => router.push(`/groups/${item.id}`)}
                                     >
-                                        <Text style={styles.addButtonText}>
-                                            {selectedUsers.includes(item.id) ? 'Added to group' : 'Add to group'}
-                                        </Text>
+                                        <Ionicons name="people" size={50} color="#fff" />
+                                        <View style={{ marginLeft: 10 }}>
+                                            <Text style={styles.username}>{item.name || 'Unnamed Group'}</Text>
+                                        </View>
                                     </TouchableOpacity>
-                                )}
-                            </View>
-                        </View>
-                    )}
+                                );
+                            }
+                        } else {
+                            // no search: show just groups
+                            return (
+                                <TouchableOpacity
+                                    style={styles.userItem}
+                                    onPress={() => {
+                                        router.push(`/groups/${item.id}`);
+                                    }}                                >
+                                    <Ionicons name="people" size={50} color="#fff" />
+                                    <View style={{ marginLeft: 10 }}>
+                                        <Text style={styles.username}>{item.name || 'Unnamed Group'}</Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                            );
+                        }
+
+                        return null;
+                    }}
                     ListEmptyComponent={
                         <Text style={{ color: '#fff', textAlign: 'center', marginTop: 20 }}>
-                            No users found
+                            {search ? 'No users found' : 'No groups found'}
                         </Text>
                     }
                     contentContainerStyle={{ paddingBottom: 100 }}
                 />
 
-                {/* Create Group Button */}
-                <TouchableOpacity style={styles.createBtn} onPress={createGroup}>
-                    <Text style={styles.createText}>Create Group</Text>
-                </TouchableOpacity>
+                {search.length > 0 && (
+                    <TouchableOpacity style={styles.createBtn} onPress={goToGroupConfirm}>
+                        <Text style={styles.createText}>Create Group</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </SafeAreaView>
     );

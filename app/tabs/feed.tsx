@@ -36,37 +36,47 @@ export default function FeedScreen() {
         return merged;
     };
 
-    // Set up onSnapshot listeners for public + private
+    // Set up onSnapshot listeners for posts
     const subscribeToPosts = () => {
         if (!currentUser) return;
 
-        // Public posts: public == true
+        // Fetch public posts that are visible to everyone
         const publicQuery = query(
             collection(db, 'posts'),
             where('public', '==', true),
             orderBy('createdAt', 'desc')
         );
 
-        // Private posts: allowedUserIds array-contains currentUser
-        const privateQuery = query(
+        // Fetch posts that the current user is allowed to see
+        // Includes followers-only posts and group posts
+        const visibleToUserQuery = query(
             collection(db, 'posts'),
             where('allowedUserIds', 'array-contains', currentUser.uid),
             orderBy('createdAt', 'desc')
         );
 
-        // Listen to the public query
+        // Subscribe to public posts
         const unsubPublic = onSnapshot(publicQuery, (snapshot) => {
             const publicDocs = snapshot.docs.map((doc) => ({
                 id: doc.id,
                 ...doc.data(),
             }));
-            // Merge into our existing userPosts
             setUserPosts((prevPosts) => mergePosts(prevPosts, publicDocs));
         });
 
-        // Return a cleanup function to unsubscribe
+        // Subscribe to followers-only and group posts
+        const unsubVisibleToUser = onSnapshot(visibleToUserQuery, (snapshot) => {
+            const visibleDocs = snapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
+            setUserPosts((prevPosts) => mergePosts(prevPosts, visibleDocs));
+        });
+
+        // Clean up both subscriptions when the screen is unfocused
         return () => {
             unsubPublic();
+            unsubVisibleToUser();
         };
     };
 
