@@ -138,7 +138,7 @@ export default function FollowersScreen() {
                     </Text>
                 }
             />
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/tabs/profile')}>
                 <Text style={styles.backButtonText}>Go Back</Text>
             </TouchableOpacity>
         </View>

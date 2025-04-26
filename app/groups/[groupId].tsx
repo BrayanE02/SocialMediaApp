@@ -37,7 +37,7 @@ export default function GroupFeedScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: 'black' }}>
-            <TopBar title="Group Feed" showBack={true} onBackPress={() => router.back()} />
+            <TopBar title="Group Feed" showBell={false} showBack={true} onBackPress={() => router.replace('/tabs/groups')} />
             <FlatList
                 data={posts}
                 keyExtractor={(item) => item.id}

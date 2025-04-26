@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import Styles from '../styles/logRegStyle'
 import { app } from '../../config/firebaseConfig';
 import { router } from 'expo-router';
-import { getFirestore, collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, getDoc } from "firebase/firestore";
 
 // Initialize Firestore
 const db = getFirestore(app);
@@ -44,14 +44,12 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
 
     // Helper function to check if a username already exists in Firestore
     const checkUsernameExists = async (username: string): Promise<boolean> => {
-        console.log("Querying Firestore for username:", username);
         try {
-            const q = query(collection(db, "users"), where("username", "==", username));
-            const querySnapshot = await getDocs(q);
-            console.log("Query complete. Documents found:", querySnapshot.empty ? "No" : "Yes");
-            return !querySnapshot.empty;
+            const docRef = doc(db, "usernames", username.toLowerCase());
+            const docSnap = await getDoc(docRef);
+            return docSnap.exists();
         } catch (error) {
-            console.error("Error querying Firestore:", error);
+            console.error("Error checking username existence:", error);
             return false;
         }
     };
@@ -89,6 +87,11 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
                 username,
                 email,
                 createdAt: new Date(),
+            });
+
+            // Save the username reference
+            await setDoc(doc(db, "usernames", username.toLowerCase()), {
+                uid: userCredential.user.uid,
             });
 
             console.log("User created successfully:", userCredential.user);

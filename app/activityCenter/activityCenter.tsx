@@ -57,6 +57,16 @@ export default function ActivityCenterScreen() {
             );
 
             setNotifications(notifsWithSender);
+
+            // Mark all unread notifications as read
+            snapshot.docs.forEach(async (docSnap) => {
+                const data = docSnap.data();
+                if (!data.read) {
+                    await updateDoc(doc(db, 'notifications', docSnap.id), {
+                        read: true,
+                    });
+                }
+            });
         });
 
         return () => unsubscribe();
@@ -77,7 +87,26 @@ export default function ActivityCenterScreen() {
                 renderItem={({ item }) => (
                     <View style={styles.card}>
                         <Text style={styles.text}>
-                            @{item.senderUsername} liked your post.
+                            <Text
+                                style={styles.username}
+                                onPress={() => {
+                                    const currentUserId = currentUser?.uid;
+
+                                    if (item.fromUserId === currentUserId) {
+                                        // Navigate to your own profile tab
+                                        router.push('/tabs/profile');
+                                    } else {
+                                        // Navigate to another user's profile
+                                        router.push({
+                                            pathname: '/tabs/profile',
+                                            params: { userId: item.fromUserId },
+                                        });
+                                    }
+                                }}
+                            >
+                                @{item.senderUsername}
+                            </Text>{' '}
+                            liked your post.
                         </Text>
                         {item.timestamp && (
                             <Text style={styles.timestamp}>
@@ -108,6 +137,10 @@ const styles = StyleSheet.create({
     text: {
         color: 'white',
         fontSize: 16,
+    },
+    username: {
+        color: '#fff',
+        fontWeight: 'bold',
     },
     timestamp: {
         color: '#aaa',

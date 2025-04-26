@@ -13,6 +13,7 @@ import TopBar from '../../components/TopBar';
 export default function FeedScreen() {
     const auth = getAuth();
     const currentUser = auth.currentUser;
+    console.log("Current user ID:", currentUser?.uid);
 
     const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
@@ -52,26 +53,62 @@ export default function FeedScreen() {
         const visibleToUserQuery = query(
             collection(db, 'posts'),
             where('allowedUserIds', 'array-contains', currentUser.uid),
-            orderBy('createdAt', 'desc')
         );
 
         // Subscribe to public posts
-        const unsubPublic = onSnapshot(publicQuery, (snapshot) => {
-            const publicDocs = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-            setUserPosts((prevPosts) => mergePosts(prevPosts, publicDocs));
-        });
+        const unsubPublic = onSnapshot(
+            publicQuery,
+            (snapshot) => {
+                snapshot.docs.forEach((doc) => {
+                    console.log("Fetched public post:", doc.id, doc.data());
+                });
+
+                const publicDocs = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                }));
+
+                setUserPosts((prevPosts) => mergePosts(prevPosts, publicDocs));
+            },
+            (error) => {
+                console.error("Firestore feed read error (publicQuery):", error);
+            }
+        );
 
         // Subscribe to followers-only and group posts
-        const unsubVisibleToUser = onSnapshot(visibleToUserQuery, (snapshot) => {
-            const visibleDocs = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-            setUserPosts((prevPosts) => mergePosts(prevPosts, visibleDocs));
-        });
+        // Subscribe to followers-only and group posts
+        const unsubVisibleToUser = onSnapshot(
+            visibleToUserQuery,
+            (snapshot) => {
+                snapshot.docs.forEach((doc) => {
+                    console.log("Fetched post:", doc.id, doc.data());
+                });
+
+                const visibleDocs = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                }));
+
+                setUserPosts((prevPosts) => mergePosts(prevPosts, visibleDocs));
+            },
+            (error) => {
+                console.error("Firestore feed read error (visibleToUserQuery):", error);
+
+                // 🔍 Check every post manually to find any that break permissions or data format
+                getDocs(collection(db, 'posts')).then((snapshot) => {
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+
+                        const hasBadAllowedUserIds = !Array.isArray(data.allowedUserIds);
+                        const hasBadCreatedAt = !data.createdAt || typeof data.createdAt.seconds !== 'number';
+
+                        if (hasBadAllowedUserIds || hasBadCreatedAt) {
+                            console.log("Problematic post:", doc.id, data);
+                        }
+                    });
+                });
+            }
+        );
 
         // Clean up both subscriptions when the screen is unfocused
         return () => {

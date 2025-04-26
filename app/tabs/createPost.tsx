@@ -237,10 +237,16 @@ export default function CreatePostScreen() {
                 }
 
                 try {
-                    const membersSnapshot = await getDocs(collection(db, "groups", selectedGroupId, "members"));
-                    const memberIds = membersSnapshot.docs.map((doc) => doc.id);
-                    newPost.allowedUserIds = [currentUser.uid, ...memberIds];
-                    newPost.groupId = selectedGroupId;
+                    const groupDocRef = doc(db, "groups", selectedGroupId);
+                    const groupSnap = await getDoc(groupDocRef);
+                    if (groupSnap.exists()) {
+                        const groupData = groupSnap.data();
+                        const memberIds = groupData.members || [];
+                        newPost.allowedUserIds = Array.from(new Set([currentUser.uid, ...memberIds]));
+                        newPost.groupId = selectedGroupId;
+                    } else {
+                        throw new Error("Group not found");
+                    }
                 } catch (err) {
                     console.error("Error getting group members:", err);
                     setUploading(false);

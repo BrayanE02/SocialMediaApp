@@ -26,7 +26,12 @@ interface Post {
     userId: string;
     mediaUrl?: string;
     likedBy?: string[];
+    public?: boolean;
+    allowedUserIds?: string[];
+    groupId?: string;
+    createdAt?: any;
 }
+
 
 export default function ProfileScreen() {
     const { userId: routeUserId } = useLocalSearchParams();
@@ -88,30 +93,81 @@ export default function ProfileScreen() {
         return () => unsubscribe();
     }, [userId]);
 
-    // Listen to the target user's public posts
     useEffect(() => {
-        if (!userId) return;
-        const q = query(
-            collection(db, 'posts'),
-            where('userId', '==', userId),
-            where('public', '==', true),
-            orderBy('createdAt', 'desc')
-        );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const postsData = snapshot.docs.map((doc) => {
+        if (!userId || !currentUserId) return;
+
+        const postsRef = collection(db, 'posts');
+
+        const unsubscribes: (() => void)[] = [];
+
+        const combinedPosts: { [id: string]: Post } = {};
+
+        const handleSnapshot = (snapshot: any) => {
+            snapshot.docs.forEach((doc: any) => {
                 const data = doc.data();
-                return {
+                combinedPosts[doc.id] = {
                     id: doc.id,
                     userId: data.userId,
                     text: data.text || '',
                     mediaUrl: data.mediaUrl,
                     likedBy: Array.isArray(data.likedBy) ? data.likedBy : [],
-                } as Post;
+                    public: data.public,
+                    allowedUserIds: data.allowedUserIds || [],
+                    groupId: data.groupId || undefined,
+                    createdAt: data.createdAt,
+                };
             });
-            setUserPosts(postsData);
-        });
-        return () => unsubscribe();
-    }, [userId]);
+            // Convert combined object into array, sorted by createdAt
+            const finalPosts = Object.values(combinedPosts).sort((a, b) => {
+                const aTime = a.createdAt?.toMillis?.() ?? 0;
+                const bTime = b.createdAt?.toMillis?.() ?? 0;
+                return bTime - aTime;
+            });
+
+            setUserPosts(finalPosts);
+        };
+
+        if (userId === currentUserId) {
+            const q = query(
+                postsRef,
+                where('userId', '==', userId),
+                orderBy('createdAt', 'desc')
+            );
+            const unsub = onSnapshot(q, handleSnapshot, (err) =>
+                console.error('own profile posts:', err.message)
+            );
+            unsubscribes.push(unsub);
+        } else {
+            // 1. Public posts
+            const publicQuery = query(
+                postsRef,
+                where('userId', '==', userId),
+                where('public', '==', true),
+                orderBy('createdAt', 'desc')
+            );
+            unsubscribes.push(
+                onSnapshot(publicQuery, handleSnapshot, (err) =>
+                    console.error('public posts:', err.message)
+                )
+            );
+
+            // 2. Followers-only posts
+            const allowedQuery = query(
+                postsRef,
+                where('userId', '==', userId),
+                where('allowedUserIds', 'array-contains', currentUserId),
+                orderBy('createdAt', 'desc')
+            );
+            unsubscribes.push(
+                onSnapshot(allowedQuery, handleSnapshot, (err) =>
+                    console.error('allowedUserIds posts:', err.message)
+                )
+            );
+        }
+
+        return () => unsubscribes.forEach((unsub) => unsub());
+    }, [userId, currentUserId]);
+
 
     // Follow the user
     async function followUser(targetUserId: string) {

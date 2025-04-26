@@ -134,7 +134,7 @@ export default function GroupsScreen() {
                                                     onPress={() => toggleUser(item.id)}
                                                 >
                                                     <Text style={styles.addButtonText}>
-                                                        {selectedUsers.includes(item.id) ? 'Added to group' : 'Add to group'}
+                                                        {selectedUsers.includes(item.id) ? 'Added' : 'Add to group'}
                                                     </Text>
                                                 </TouchableOpacity>
                                             )}

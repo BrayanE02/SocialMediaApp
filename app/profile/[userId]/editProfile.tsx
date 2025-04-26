@@ -21,19 +21,6 @@ const EditProfileScreen = () => {
     const [password, setPassword] = useState('');
     const [currentPassword, setCurrentPassword] = useState(''); // Required for reauthentication
 
-    async function ensureFollowersSubcollection(userId: string) {
-        try {
-            // This writes a dummy document named "initDoc" under users/{userId}/followers
-            await setDoc(doc(db, 'users', userId, 'followers', 'initDoc'), {
-                createdAt: serverTimestamp(),
-                dummy: true
-            });
-            console.log('Followers subcollection ensured with a dummy doc.');
-        } catch (error) {
-            console.error('Error ensuring followers subcollection:', error);
-        }
-    }
-
     // Fetch the current user's data from Firestore
     useEffect(() => {
         const fetchData = async () => {
@@ -52,9 +39,6 @@ const EditProfileScreen = () => {
                         setUsername(currentUser.displayName || '');
                         setProfileImage(currentUser.photoURL || 'https://via.placeholder.com/100');
                     }
-
-                    // Call our helper to ensure a "followers" subcollection is created
-                    await ensureFollowersSubcollection(currentUser.uid);
 
                 } catch (error: any) {
                     console.error('Error fetching user data:', error.message);
@@ -79,7 +63,7 @@ const EditProfileScreen = () => {
 
     // Function to navigate back to the Profile screen
     const goBack = () => {
-        router.push('/tabs/profile/');
+        router.push('/tabs/profile');
     };
 
     const uploadProfileImage = async (uri: string) => {
@@ -222,7 +206,7 @@ const EditProfileScreen = () => {
                 bio,
                 photoURL: profileImage,  // Profile image can be updated without reauth
             });
-            router.push(`/tabs/profile/${currentUser.uid}`);
+            router.push(`/tabs/profile`);
 
         } catch (error: any) {
             console.error('Error updating profile:', error.message);
